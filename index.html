@@ -1,1 +1,211 @@
-hi world
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Wild West Gold Miner</title>
+<script src="https://cdn.jsdelivr.net/npm/ethers@6.7.0/dist/ethers.min.js"></script>
+<style>
+  body {
+    margin: 0;
+    font-family: "Courier New", monospace;
+    background: #f4e1c1;
+    color: #222;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: flex-start;
+    height: 100vh;
+    padding: 20px;
+  }
+
+  #gameText {
+    white-space: pre-wrap;
+    text-align: left;
+    margin-bottom: 20px;
+    width: 90%;
+    max-width: 600px;
+  }
+
+  button {
+    font-family: "Courier New", monospace;
+    font-size: 16px;
+    margin: 5px;
+    padding: 8px 16px;
+    border: none;
+    border-radius: 5px;
+    background: #c2a478;
+    cursor: pointer;
+    transition: 0.2s;
+  }
+
+  button:hover {
+    background: #a57c42;
+    color: #fff;
+  }
+
+  #choices {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+  }
+
+  #walletUI {
+    margin-top: 20px;
+    text-align: center;
+  }
+</style>
+</head>
+<body>
+
+<h1>🏜️ Wild West Gold Miner</h1>
+
+<div id="gameText"></div>
+<div id="choices"></div>
+
+<!-- Wallet and collection UI -->
+<div id="walletUI" style="display:none;">
+  <button id="connectBtn">Connect Wallet</button>
+  <button id="collectBtn" disabled>Collect Gold</button>
+  <p id="walletAddress">Not connected</p>
+  <p id="collectStatus"></p>
+</div>
+
+<script>
+// ======== GAME SECTION ==========
+const gameText = document.getElementById('gameText');
+const choicesDiv = document.getElementById('choices');
+const walletUI = document.getElementById('walletUI');
+
+function clearChoices() {
+  choicesDiv.innerHTML = '';
+}
+
+function addChoice(text, callback) {
+  const btn = document.createElement('button');
+  btn.textContent = text;
+  btn.onclick = callback;
+  choicesDiv.appendChild(btn);
+}
+
+let position = 0;
+
+const path = [
+  { text: `You arrive at a dusty stretch of the Wild West frontier. A crude note reads: "I found it first, stay away!"` },
+  { text: `The path winds forward. You hear distant footsteps and the wind kicking up sand.` },
+  { text: `You see some tumbleweeds rolling by. A faint glint catches your eye in the distance.` },
+  { text: `A fork in the path appears. Left looks rocky and suspicious, right looks like loose dirt with a flicker.` , fork: true },
+  { text: `You walk further along the dirt path. The glimmer is closer now. It seems safe.` , dirt: true }
+];
+
+function renderPosition() {
+  clearChoices();
+  const current = path[position];
+  gameText.textContent = current.text;
+
+  if (current.fork) {
+    addChoice("Take the left rocky path", leftPath);
+    addChoice("Take the right dirt path", rightPath);
+    addChoice("Go back", walkBack);
+  } else if (current.dirt) {
+    addChoice("Inspect the dirt pile", inspectDirt);
+    addChoice("Keep walking forward", walkForward);
+    addChoice("Walk back", walkBack);
+  } else {
+    if (position > 0) addChoice("Walk back", walkBack);
+    if (position < path.length - 1) addChoice("Walk forward", walkForward);
+  }
+}
+
+function walkForward() {
+  if (position < path.length - 1) position++;
+  renderPosition();
+}
+
+function walkBack() {
+  if (position > 0) position--;
+  renderPosition();
+}
+
+function leftPath() {
+  gameText.textContent = `You take the left rocky path. Suddenly the ground gives way! It's a hidden booby trap!\nYou tumble down a pit, bruised but alive.`;
+  clearChoices();
+  addChoice("Climb out and return to the fork", () => { position = 3; renderPosition(); });
+}
+
+function rightPath() {
+  position = 4;
+  renderPosition();
+}
+
+function inspectDirt() {
+  gameText.textContent = `You dig carefully through the dirt and uncover a small amount of glimmering material. Not a jackpot, but a start.\nYou sense the Earth Gold contract nearby...`;
+  clearChoices();
+  addChoice("Try to collect gold", showWalletUI);
+  addChoice("Keep searching nearby", continueSearching);
+  addChoice("Walk back", walkBack);
+}
+
+function continueSearching() {
+  gameText.textContent = `You continue sifting through dirt and rocks. Slowly, more glimmering pieces are uncovered. Patience seems to pay off.`;
+  clearChoices();
+  addChoice("Keep searching", continueSearching);
+  addChoice("Move on", walkForward);
+  addChoice("Walk back", walkBack);
+}
+
+function showWalletUI() {
+  walletUI.style.display = "block";
+}
+
+// Start the game
+renderPosition();
+
+// ======== WEB3 SECTION ==========
+const connectBtn = document.getElementById("connectBtn");
+const collectBtn = document.getElementById("collectBtn");
+const walletAddress = document.getElementById("walletAddress");
+const collectStatus = document.getElementById("collectStatus");
+
+const dirtAddress = "0x7f7a010794c06c5eaaa866dde672e3d429396fc3"; // your deployed contract
+let userAddress;
+
+connectBtn.addEventListener("click", async () => {
+  if (!window.ethereum) return alert("MetaMask not installed!");
+
+  try {
+    const accounts = await window.ethereum.request({ method: "eth_requestAccounts" });
+    userAddress = accounts[0];
+    walletAddress.textContent = "Connected: " + userAddress;
+    connectBtn.disabled = true;
+    collectBtn.disabled = false;
+  } catch (err) {
+    console.error(err);
+    alert("Wallet connection failed: " + err.message);
+  }
+});
+
+collectBtn.addEventListener("click", async () => {
+  if (!userAddress) return alert("Connect wallet first!");
+
+  try {
+    collectStatus.textContent = "Collecting...";
+    await window.ethereum.request({
+      method: "eth_sendTransaction",
+      params: [{
+        from: userAddress,
+        to: dirtAddress,
+        data: "0xe5225381" // function selector for collect()
+      }]
+    });
+    collectStatus.textContent = "Gold collected successfully!";
+  } catch (err) {
+    console.error(err);
+    collectStatus.textContent = "Collect failed: " + err.message;
+  }
+});
+</script>
+
+</body>
+</html>
+
